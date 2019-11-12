@@ -159,16 +159,21 @@ export async function buildTransaction(
 ): Promise<{ id: string, transaction: Uint8Array, fee: number }> {
   const {
     OutputPolicy,
-    TransactionBuilder,
     Address,
+    TransactionBuilder,
+    InputOutput,
+    InputOutputBuilder,
+    Payload,
+    Witnesses,
+    PayloadAuthData,
+    Transaction,
+    TransactionBuilderSetWitness,
+    TransactionBuilderSetAuthData,
     Input,
     Value,
     Fee,
-    TransactionFinalizer,
-    Transaction,
     Fragment,
     PrivateKey,
-    PublicKey,
     Witness,
     SpendingCounter,
     Hash,
@@ -178,45 +183,62 @@ export async function buildTransaction(
   } = await wasmBindings;
   const { calculateFee } = feeCalculator(nodeSettings);
   const privateKey: PrivateKey = PrivateKey.from_bech32(secret);
-  const sourcePublicKey: PublicKey = privateKey.to_public();
-  const sourceAccount: Account = Account.from_public_key(sourcePublicKey);
+  const sourceAccount: Account = Account.from_public_key(
+    privateKey.to_public()
+  );
 
-  // 1 input + 1 output
-  const computedFee = calculateFee(1, 1, 0);
-  const inputAmount = computedFee + amount;
+  // 1 input + 1 certificate
+  const computedFee: number = calculateFee(1, 1, 0);
   const input: Input = Input.from_account(
     sourceAccount,
-    Value.from_str(inputAmount.toString())
+    Value.from_str((amount + computedFee).toString())
   );
-  const txbuilder: TransactionBuilder = TransactionBuilder.new_no_payload();
-  txbuilder.add_input(input);
+  const iobuilder: InputOutputBuilder = InputOutputBuilder.empty();
 
-  txbuilder.add_output(
+  iobuilder.add_input(input);
+  iobuilder.add_output(
     Address.from_string(destination),
     Value.from_str(amount.toString())
   );
 
-  const feeAlgorithm = Fee.linear_fee(
+  const feeAlgorithm: Fee = Fee.linear_fee(
     Value.from_str(nodeSettings.fees.constant.toString()),
     Value.from_str(nodeSettings.fees.coefficient.toString()),
     Value.from_str(nodeSettings.fees.certificate.toString())
   );
+
   // The amount is exact, that's why we use `forget()`
-  const finalizedTx: Transaction = txbuilder.seal_with_output_policy(
+  const IOs: InputOutput = iobuilder.seal_with_output_policy(
+    Payload.no_payload(),
     feeAlgorithm,
     OutputPolicy.forget()
   );
-  const finalizer: TransactionFinalizer = new TransactionFinalizer(finalizedTx);
 
-  const witness = Witness.for_account(
+  const builderSetWitness: TransactionBuilderSetWitness = new TransactionBuilder()
+    .no_payload()
+    .set_ios(IOs.inputs(), IOs.outputs());
+
+  const witness: Witness = Witness.for_account(
     Hash.from_hex(nodeSettings.block0Hash),
-    finalizer.get_tx_sign_data_hash(),
+    builderSetWitness.get_auth_data_for_witness(),
     privateKey,
     SpendingCounter.from_u32(accountCounter)
   );
-  finalizer.set_witness(0, witness);
-  const signedTx = finalizer.finalize();
-  const message: Fragment = Fragment.from_authenticated_transaction(signedTx);
+  const witnesses: Witness = Witnesses.new();
+  witnesses.add(witness);
+
+  const builderSignCertificate: TransactionBuilderSetAuthData = builderSetWitness.set_witnesses(
+    witnesses
+  );
+
+  const signature: PayloadAuthData = PayloadAuthData.for_no_payload();
+
+  const signedTx: Transaction = builderSignCertificate.set_payload_auth(
+    signature
+  );
+
+  const message: Fragment = Fragment.from_transaction(signedTx);
+
   return {
     transaction: message.as_bytes(),
     id: uint8array_to_hex(message.id().as_bytes()),
