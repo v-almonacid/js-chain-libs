@@ -4,13 +4,14 @@ import type { AccountKeys, NodeSettings } from '../reducers/types';
 import type {
   PoolId as InternalPoolId,
   PrivateKey as InternalPrivateKey,
-  Counter
+  Counter,
+  TransactionOutput
 } from '../models';
 import feeCalculator from './feeCalculator';
 
 const wasmBindings = import('js-chain-libs/js_chain_libs');
 export async function getAccountFromPrivateKey(
-  secret: string
+  secret: InternalPrivateKey
 ): Promise<AccountKeys> {
   const {
     PrivateKey,
@@ -44,48 +45,15 @@ export async function buildDelegateTransaction(
   nodeSettings: NodeSettings
 ): Promise<{ id: string, transaction: Uint8Array, fee: number }> {
   const {
-    OutputPolicy,
     PoolId,
-    TransactionBuilder,
-    InputOutput,
-    InputOutputBuilder,
-    Payload,
-    Witnesses,
-    PayloadAuthData,
-    DelegationType,
-    StakeDelegationAuthData,
-    AccountBindingSignature,
-    Transaction,
-    TransactionBuilderSetWitness,
-    TransactionBuilderSetAuthData,
     Certificate,
     StakeDelegation,
-    Input,
-    Value,
-    Fee,
-    Fragment,
+    DelegationType,
     PrivateKey,
-    PublicKey,
-    Witness,
-    SpendingCounter,
-    Hash,
-    Account,
-    // eslint-disable-next-line camelcase
-    uint8array_to_hex
+    PublicKey
   } = await wasmBindings;
-  const { calculateFee } = feeCalculator(nodeSettings);
   const privateKey: PrivateKey = PrivateKey.from_bech32(secret);
   const sourcePublicKey: PublicKey = privateKey.to_public();
-  const sourceAccount: Account = Account.from_public_key(
-    privateKey.to_public()
-  );
-
-  // 1 input + 1 certificate
-  const computedFee: number = calculateFee(1, 0, 1);
-  const input: Input = Input.from_account(
-    sourceAccount,
-    Value.from_str(computedFee.toString())
-  );
   // Create certificate
   const singlePoolDelegation: DelegationType = DelegationType.full(
     PoolId.from_hex(poolId)
@@ -93,70 +61,38 @@ export async function buildDelegateTransaction(
   const certificate: Certificate = Certificate.stake_delegation(
     StakeDelegation.new(singlePoolDelegation, sourcePublicKey)
   );
-
-  const iobuilder: InputOutputBuilder = InputOutputBuilder.empty();
-
-  iobuilder.add_input(input);
-
-  const feeAlgorithm: Fee = Fee.linear_fee(
-    Value.from_str(nodeSettings.fees.constant.toString()),
-    Value.from_str(nodeSettings.fees.coefficient.toString()),
-    Value.from_str(nodeSettings.fees.certificate.toString())
-  );
-
-  // The amount is exact, that's why we use `forget()`
-  const IOs: InputOutput = iobuilder.seal_with_output_policy(
-    Payload.certificate(certificate),
-    feeAlgorithm,
-    OutputPolicy.forget()
-  );
-
-  const builderSetWitness: TransactionBuilderSetWitness = new TransactionBuilder()
-    .payload(certificate)
-    .set_ios(IOs.inputs(), IOs.outputs());
-
-  const witness: Witness = Witness.for_account(
-    Hash.from_hex(nodeSettings.block0Hash),
-    builderSetWitness.get_auth_data_for_witness(),
-    privateKey,
-    SpendingCounter.from_u32(accountCounter)
-  );
-  const witnesses: Witness = Witnesses.new();
-  witnesses.add(witness);
-
-  const builderSignCertificate: TransactionBuilderSetAuthData = builderSetWitness.set_witnesses(
-    witnesses
-  );
-
-  const signature: PayloadAuthData = PayloadAuthData.for_stake_delegation(
-    StakeDelegationAuthData.new(
-      AccountBindingSignature.new(
-        PrivateKey.from_bech32(secret),
-        builderSignCertificate.get_auth_data()
-      )
-    )
-  );
-
-  const signedTx: Transaction = builderSignCertificate.set_payload_auth(
-    signature
-  );
-
-  const message: Fragment = Fragment.from_transaction(signedTx);
-
-  return {
-    transaction: message.as_bytes(),
-    id: uint8array_to_hex(message.id().as_bytes()),
-    fee: computedFee
-  };
+  return buildTransaction(secret, nodeSettings, accountCounter, certificate);
 }
 
-export async function buildTransaction(
+export async function buildSendFundsTransaction(
   destination: string,
   amount: number,
-  secret: string,
+  secret: InternalPrivateKey,
   accountCounter: number,
   nodeSettings: NodeSettings
 ): Promise<{ id: string, transaction: Uint8Array, fee: number }> {
+  return buildTransaction(secret, nodeSettings, accountCounter, undefined, {
+    amount,
+    address: destination
+  });
+}
+
+async function buildTransaction(
+  secret: string,
+  nodeSettings: NodeSettings,
+  accountCounter: number,
+  certificate?: any,
+  output?: TransactionOutput
+) {
+  if (!certificate && !output) {
+    console.error(
+      'it doesnt make sense to send a transaction with only an input'
+    );
+  } else if (certificate && output) {
+    console.error(
+      'in the wallet theres no way of sending a trasaction with both an output and a certificate, this is an error'
+    );
+  }
   const {
     OutputPolicy,
     Address,
@@ -169,6 +105,9 @@ export async function buildTransaction(
     Transaction,
     TransactionBuilderSetWitness,
     TransactionBuilderSetAuthData,
+    TransactionBuilderSetIOs,
+    StakeDelegationAuthData,
+    AccountBindingSignature,
     Input,
     Value,
     Fee,
@@ -188,18 +127,28 @@ export async function buildTransaction(
   );
 
   // 1 input + 1 certificate
-  const computedFee: number = calculateFee(1, 1, 0);
-  const input: Input = Input.from_account(
-    sourceAccount,
-    Value.from_str((amount + computedFee).toString())
+  const computedFee: number = calculateFee(
+    1,
+    output ? 1 : 0,
+    certificate ? 1 : 0
   );
   const iobuilder: InputOutputBuilder = InputOutputBuilder.empty();
+  let inputAmount;
+  if (typeof output === 'object') {
+    inputAmount = output.amount + computedFee;
+    iobuilder.add_output(
+      Address.from_string(output.address),
+      Value.from_str(output.amount.toString())
+    );
+  } else {
+    inputAmount = computedFee;
+  }
+  const input: Input = Input.from_account(
+    sourceAccount,
+    Value.from_str(inputAmount.toString())
+  );
 
   iobuilder.add_input(input);
-  iobuilder.add_output(
-    Address.from_string(destination),
-    Value.from_str(amount.toString())
-  );
 
   const feeAlgorithm: Fee = Fee.linear_fee(
     Value.from_str(nodeSettings.fees.constant.toString()),
@@ -209,14 +158,21 @@ export async function buildTransaction(
 
   // The amount is exact, that's why we use `forget()`
   const IOs: InputOutput = iobuilder.seal_with_output_policy(
-    Payload.no_payload(),
+    certificate ? Payload.certificate(certificate) : Payload.no_payload(),
     feeAlgorithm,
     OutputPolicy.forget()
   );
 
-  const builderSetWitness: TransactionBuilderSetWitness = new TransactionBuilder()
-    .no_payload()
-    .set_ios(IOs.inputs(), IOs.outputs());
+  const txbuilder: TransactionBuilder = new TransactionBuilder();
+
+  const builderSetIOs: TransactionBuilderSetIOs = certificate
+    ? txbuilder.payload(certificate)
+    : txbuilder.no_payload();
+
+  const builderSetWitness: TransactionBuilderSetWitness = builderSetIOs.set_ios(
+    IOs.inputs(),
+    IOs.outputs()
+  );
 
   const witness: Witness = Witness.for_account(
     Hash.from_hex(nodeSettings.block0Hash),
@@ -231,7 +187,16 @@ export async function buildTransaction(
     witnesses
   );
 
-  const signature: PayloadAuthData = PayloadAuthData.for_no_payload();
+  const signature: PayloadAuthData = certificate
+    ? PayloadAuthData.for_stake_delegation(
+        StakeDelegationAuthData.new(
+          AccountBindingSignature.new(
+            PrivateKey.from_bech32(secret),
+            builderSignCertificate.get_auth_data()
+          )
+        )
+      )
+    : PayloadAuthData.for_no_payload();
 
   const signedTx: Transaction = builderSignCertificate.set_payload_auth(
     signature

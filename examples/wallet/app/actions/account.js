@@ -15,7 +15,7 @@ import type {
 } from '../models';
 import {
   getAccountFromPrivateKey,
-  buildTransaction,
+  buildSendFundsTransaction,
   buildDelegateTransaction
 } from '../utils/wasmWrapper';
 import {
@@ -122,7 +122,7 @@ export function sendTransaction(
     const state: AppState = getState();
     let transactionId;
     let transactionFee;
-    return buildTransaction(
+    return buildSendFundsTransaction(
       destination,
       amount,
       state.account.privateKey,
