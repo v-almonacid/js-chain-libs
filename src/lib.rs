@@ -1023,6 +1023,24 @@ impl SpendingCounter {
     }
 }
 
+#[wasm_bindgen]
+pub struct OldUtxoDeclaration(chain::legacy::UtxoDeclaration);
+
+#[wasm_bindgen]
+impl OldUtxoDeclaration {
+    pub fn size(&self) -> usize {
+        self.0.addrs.len()
+    }
+
+    pub fn get_address(&self, index: usize) -> String {
+        format!("{}", self.0.addrs[index].0)
+    }
+
+    pub fn get_value(&self, index: usize) -> Value {
+        self.0.addrs[index].1.into()
+    }
+}
+
 /// All possible messages recordable in the Block content
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -1064,6 +1082,13 @@ impl Fragment {
             _ => Err(JsValue::from_str("Invalid fragment type")),
         }
         .map(Transaction)
+    }
+
+    pub fn get_old_utxo_declaration(self) -> Result<OldUtxoDeclaration, JsValue> {
+        match self.0 {
+            chain::fragment::Fragment::OldUtxoDeclaration(decl) => Ok(OldUtxoDeclaration(decl)),
+            _ => Err(JsValue::from_str("fragment is not OldUtxoDeclaration"))
+        }
     }
 
     pub fn as_bytes(&self) -> Result<Vec<u8>, JsValue> {
