@@ -86,8 +86,4 @@ impl Transaction {
             .collect::<Vec<Output>>()
             .into()
     }
-
-    pub fn clone(&self) -> Transaction {
-        Transaction(self.0.clone())
-    }
 }
