@@ -195,6 +195,7 @@ macro_rules! impl_signature {
 impl_signature!(Ed25519Signature, Vec<u8>, crypto::Ed25519);
 impl_signature!(AccountWitness, tx::WitnessAccountData, crypto::Ed25519);
 impl_signature!(UtxoWitness, tx::WitnessUtxoData, crypto::Ed25519);
+impl_signature!(LegacyUtxoWitness, tx::WitnessUtxoData, crypto::Ed25519Bip32);
 
 /// ED25519 signing key, either normal or extended
 #[wasm_bindgen]
@@ -1588,6 +1589,24 @@ impl Witness {
     // Witness for a account-based transaction generated externally (such as hardware wallets)
     pub fn from_external_account(witness: &AccountWitness) -> Witness {
         Witness(tx::Witness::Account(witness.0.clone()))
+    }
+
+    /// Generate Witness for an legacy utxo-based transaction Input
+    pub fn for_legacy_utxo(
+        genesis_hash: &Hash,
+        transaction_id: &TransactionSignDataHash,
+        secret_key: &Bip32PrivateKey,
+    ) -> Witness {
+        Witness(tx::Witness::new_old_utxo(
+            &genesis_hash.0,
+            &transaction_id.0,
+            &secret_key.0,
+        ))
+    }
+
+    // Witness for a legacy utxo-based transaction generated externally (such as hardware wallets)
+    pub fn from_external_legacy_utxo(key: &Bip32PublicKey, witness: &LegacyUtxoWitness) -> Witness {
+        Witness(tx::Witness::OldUtxo(key.0.clone(), witness.0.clone()))
     }
 
     /// Get string representation
