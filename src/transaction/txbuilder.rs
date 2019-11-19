@@ -163,11 +163,11 @@ impl TransactionBuilderSetAuthData {
     }
 
     /// Set the authenticated data
-    pub fn set_payload_auth(self, auth: PayloadAuthData) -> Result<Transaction, JsValue> {
+    pub fn set_payload_auth(self, auth: &PayloadAuthData) -> Result<Transaction, JsValue> {
         use super::TaggedTransaction as T;
         use TaggedPayloadAuthData as P;
 
-        let tx = match auth.0 {
+        let tx = match &auth.0 {
             P::NoPayload(a) => match self.0 {
                 TaggedTransactionBuilderSetAuthData::NoExtra(builder) => {
                     T::NoExtra(builder.set_payload_auth(&a))
@@ -234,20 +234,20 @@ impl PayloadAuthData {
         Self(TaggedPayloadAuthData::OwnerStakeDelegation(()))
     }
 
-    pub fn for_stake_delegation(auth_data: StakeDelegationAuthData) -> PayloadAuthData {
-        Self(TaggedPayloadAuthData::StakeDelegation(auth_data.0))
+    pub fn for_stake_delegation(auth_data: &StakeDelegationAuthData) -> PayloadAuthData {
+        Self(TaggedPayloadAuthData::StakeDelegation(auth_data.0.clone()))
     }
 
-    pub fn for_pool_registration(auth_data: PoolRegistrationAuthData) -> PayloadAuthData {
-        Self(TaggedPayloadAuthData::PoolRegistration(auth_data.0))
+    pub fn for_pool_registration(auth_data: &PoolRegistrationAuthData) -> PayloadAuthData {
+        Self(TaggedPayloadAuthData::PoolRegistration(auth_data.0.clone()))
     }
 
-    pub fn for_pool_retirement(auth_data: PoolRetirementAuthData) -> PayloadAuthData {
-        Self(TaggedPayloadAuthData::PoolRegistration(auth_data.0))
+    pub fn for_pool_retirement(auth_data: &PoolRetirementAuthData) -> PayloadAuthData {
+        Self(TaggedPayloadAuthData::PoolRegistration(auth_data.0.clone()))
     }
 
-    pub fn for_pool_update(auth_data: PoolUpdateAuthData) -> PayloadAuthData {
-        Self(TaggedPayloadAuthData::PoolUpdate(auth_data.0))
+    pub fn for_pool_update(auth_data: &PoolUpdateAuthData) -> PayloadAuthData {
+        Self(TaggedPayloadAuthData::PoolUpdate(auth_data.0.clone()))
     }
 }
 
@@ -256,8 +256,8 @@ pub struct StakeDelegationAuthData(<certificate::StakeDelegation as tx::Payload>
 
 #[wasm_bindgen]
 impl StakeDelegationAuthData {
-    pub fn new(signature: AccountBindingSignature) -> StakeDelegationAuthData {
-        StakeDelegationAuthData(signature.0)
+    pub fn new(signature: &AccountBindingSignature) -> StakeDelegationAuthData {
+        StakeDelegationAuthData(signature.0.clone())
     }
 }
 
@@ -272,8 +272,8 @@ crate::impl_collection!(IndexSignatures, IndexedSignature);
 
 #[wasm_bindgen]
 impl IndexedSignature {
-    pub fn new(index: u8, signature: AccountBindingSignature) -> IndexedSignature {
-        Self { index, signature }
+    pub fn new(index: u8, signature: &AccountBindingSignature) -> IndexedSignature {
+        Self { index, signature: signature.clone() }
     }
 }
 
@@ -296,7 +296,7 @@ pub struct PoolRegistrationAuthData(<certificate::PoolRegistration as tx::Payloa
 
 #[wasm_bindgen]
 impl PoolRegistrationAuthData {
-    pub fn new(signatures: IndexSignatures) -> Result<PoolRegistrationAuthData, JsValue> {
+    pub fn new(signatures: &IndexSignatures) -> Result<PoolRegistrationAuthData, JsValue> {
         signatures
             .0
             .iter()
@@ -320,7 +320,7 @@ pub struct PoolRetirementAuthData(<certificate::PoolRetirement as tx::Payload>::
 
 #[wasm_bindgen]
 impl PoolRetirementAuthData {
-    pub fn new(signatures: IndexSignatures) -> Result<PoolRetirementAuthData, JsValue> {
+    pub fn new(signatures: &IndexSignatures) -> Result<PoolRetirementAuthData, JsValue> {
         signatures
             .0
             .iter()
@@ -344,7 +344,7 @@ pub struct PoolUpdateAuthData(<certificate::PoolUpdate as tx::Payload>::Auth);
 
 #[wasm_bindgen]
 impl PoolUpdateAuthData {
-    pub fn new(signatures: IndexSignatures) -> Result<PoolUpdateAuthData, JsValue> {
+    pub fn new(signatures: &IndexSignatures) -> Result<PoolUpdateAuthData, JsValue> {
         signatures
             .0
             .iter()

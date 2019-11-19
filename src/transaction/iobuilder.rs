@@ -68,9 +68,9 @@ impl InputOutputBuilder {
 
     /// Add output to the IO Builder
     #[wasm_bindgen]
-    pub fn add_output(&mut self, address: Address, value: Value) -> Result<(), JsValue> {
+    pub fn add_output(&mut self, address: &Address, value: &Value) -> Result<(), JsValue> {
         self.0
-            .add_output(address.0, value.0)
+            .add_output(address.0.clone(), value.0)
             .map_err(|e| JsValue::from_str(&format! {"{:?}", e}))
     }
 
@@ -116,7 +116,7 @@ impl InputOutputBuilder {
     }
     /// Seal the transaction by passing fee rule
     #[wasm_bindgen]
-    pub fn seal(self, payload: &Payload, fee_algorithm: Fee) -> Result<InputOutput, JsValue> {
+    pub fn seal(self, payload: &Payload, fee_algorithm: &Fee) -> Result<InputOutput, JsValue> {
         use tx::Payload as _;
         let fee_algorithm = match fee_algorithm.0 {
             FeeVariant::Linear(algo) => algo,
@@ -139,8 +139,8 @@ impl InputOutputBuilder {
     pub fn seal_with_output_policy(
         self,
         payload: &Payload,
-        fee_algorithm: Fee,
-        policy: OutputPolicy,
+        fee_algorithm: &Fee,
+        policy: &OutputPolicy,
     ) -> Result<InputOutput, JsValue> {
         use tx::Payload as _;
 
@@ -150,7 +150,7 @@ impl InputOutputBuilder {
         map_payload!(&payload.0, |payload| self.0.seal_with_output_policy(
             payload.payload_data().borrow(),
             &fee_algorithm,
-            policy.0,
+            policy.0.clone(),
         ))
         .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
         .map(|(_balance, _unassigned, io)| InputOutput(io))
