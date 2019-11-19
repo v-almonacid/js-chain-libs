@@ -341,8 +341,8 @@ impl PublicKeys {
         self.0[index].clone()
     }
 
-    pub fn add(&mut self, key: PublicKey) {
-        self.0.push(key);
+    pub fn add(&mut self, key: &PublicKey) {
+        self.0.push(key.clone());
     }
 }
 
@@ -674,8 +674,8 @@ impl OutputPolicy {
     }
 
     /// use the given address as the only change address
-    pub fn one(address: Address) -> OutputPolicy {
-        tx::OutputPolicy::One(address.0).into()
+    pub fn one(address: &Address) -> OutputPolicy {
+        tx::OutputPolicy::One(address.0.clone()).into()
     }
 }
 
@@ -755,7 +755,7 @@ impl Input {
         Input(tx::Input::from_utxo(utxo_pointer.0))
     }
 
-    pub fn from_account(account: &Account, v: Value) -> Self {
+    pub fn from_account(account: &Account, v: &Value) -> Self {
         let identifier = account.to_identifier();
         Input(tx::Input::from_account(identifier.0, v.0))
     }
@@ -820,9 +820,9 @@ impl From<tx::UtxoPointer> for UtxoPointer {
 
 #[wasm_bindgen]
 impl UtxoPointer {
-    pub fn new(fragment_id: FragmentId, output_index: u8, value: Value) -> UtxoPointer {
+    pub fn new(fragment_id: &FragmentId, output_index: u8, value: &Value) -> UtxoPointer {
         UtxoPointer(tx::UtxoPointer {
-            transaction_id: fragment_id.0,
+            transaction_id: fragment_id.0.clone(),
             output_index,
             value: value.0,
         })
@@ -866,8 +866,8 @@ impl Account {
         chain_addr::Address(discriminant.into(), kind).into()
     }
 
-    pub fn single_from_public_key(key: PublicKey) -> Account {
-        Account(tx::AccountIdentifier::Single(key.0.into()))
+    pub fn single_from_public_key(key: &PublicKey) -> Account {
+        Account(tx::AccountIdentifier::Single(key.0.clone().into()))
     }
 
     pub fn to_identifier(&self) -> AccountIdentifier {
@@ -1074,12 +1074,12 @@ impl DelegationType {
         Self(chain::account::DelegationType::NonDelegated)
     }
 
-    pub fn full(pool_id: PoolId) -> Self {
-        Self(chain::account::DelegationType::Full(pool_id.0))
+    pub fn full(pool_id: &PoolId) -> Self {
+        Self(chain::account::DelegationType::Full(pool_id.0.clone()))
     }
 
-    pub fn ratio(r: DelegationRatio) -> Self {
-        Self(chain::account::DelegationType::Ratio(r.0))
+    pub fn ratio(r: &DelegationRatio) -> Self {
+        Self(chain::account::DelegationType::Ratio(r.0.clone()))
     }
 }
 
@@ -1106,8 +1106,8 @@ pub struct PoolDelegationRatio {
 #[wasm_bindgen]
 impl PoolDelegationRatio {
     //TODO: Add constructor attribute
-    pub fn new(pool: PoolId, part: u8) -> PoolDelegationRatio {
-        Self { pool, part }
+    pub fn new(pool: &PoolId, part: u8) -> PoolDelegationRatio {
+        Self { pool: pool.clone(), part }
     }
 }
 
@@ -1116,7 +1116,7 @@ impl_collection!(PoolDelegationRatios, PoolDelegationRatio);
 #[wasm_bindgen]
 impl DelegationRatio {
     //TODO: Add constructor attribute
-    pub fn new(parts: u8, pools: PoolDelegationRatios) -> Option<DelegationRatio> {
+    pub fn new(parts: u8, pools: &PoolDelegationRatios) -> Option<DelegationRatio> {
         let pools = pools
             .0
             .iter()
@@ -1131,10 +1131,10 @@ impl DelegationRatio {
 #[wasm_bindgen]
 impl StakeDelegation {
     /// Create a stake delegation object from account (stake key) to pool_id
-    pub fn new(delegation_type: DelegationType, account: PublicKey) -> StakeDelegation {
+    pub fn new(delegation_type: &DelegationType, account: &PublicKey) -> StakeDelegation {
         certificate::StakeDelegation {
-            account_id: tx::UnspecifiedAccountIdentifier::from_single_account(account.0.into()),
-            delegation: delegation_type.0,
+            account_id: tx::UnspecifiedAccountIdentifier::from_single_account(account.0.clone().into()),
+            delegation: delegation_type.0.clone(),
         }
         .into()
     }
@@ -1143,13 +1143,13 @@ impl StakeDelegation {
 #[wasm_bindgen]
 impl Certificate {
     /// Create a Certificate for StakeDelegation
-    pub fn stake_delegation(stake_delegation: StakeDelegation) -> Certificate {
-        certificate::Certificate::StakeDelegation(stake_delegation.0).into()
+    pub fn stake_delegation(stake_delegation: &StakeDelegation) -> Certificate {
+        certificate::Certificate::StakeDelegation(stake_delegation.0.clone()).into()
     }
 
     /// Create a Certificate for PoolRegistration
-    pub fn stake_pool_registration(pool_registration: PoolRegistration) -> Certificate {
-        certificate::Certificate::PoolRegistration(pool_registration.0).into()
+    pub fn stake_pool_registration(pool_registration: &PoolRegistration) -> Certificate {
+        certificate::Certificate::PoolRegistration(pool_registration.0.clone()).into()
     }
 }
 
@@ -1157,28 +1157,28 @@ impl Certificate {
 impl PoolRegistration {
     #[wasm_bindgen(constructor)]
     pub fn new(
-        serial: U128,
-        owners: PublicKeys,
-        operators: PublicKeys,
+        serial: &U128,
+        owners: &PublicKeys,
+        operators: &PublicKeys,
         management_threshold: u8,
-        start_validity: TimeOffsetSeconds,
-        kes_public_key: KesPublicKey,
-        vrf_public_key: VrfPublicKey,
+        start_validity: &TimeOffsetSeconds,
+        kes_public_key: &KesPublicKey,
+        vrf_public_key: &VrfPublicKey,
     ) -> PoolRegistration {
         use chain::certificate::PoolPermissions;
         chain::certificate::PoolRegistration {
-            serial: serial.0,
-            owners: owners.0.into_iter().map(|key| key.0).collect(),
-            operators: operators.0.into_iter().map(|key| key.0).collect(),
+            serial: serial.0.clone(),
+            owners: owners.0.clone().into_iter().map(|key| key.0).collect(),
+            operators: operators.0.clone().into_iter().map(|key| key.0).collect(),
             permissions: PoolPermissions::new(management_threshold),
-            start_validity: start_validity.0,
+            start_validity: start_validity.0.clone(),
             // TODO: Hardcoded parameter
             rewards: chain::rewards::TaxType::zero(),
             // TODO: Hardcoded parameter
             reward_account: None,
             keys: chain::leadership::genesis::GenesisPraosLeader {
-                kes_public_key: kes_public_key.0,
-                vrf_public_key: vrf_public_key.0,
+                kes_public_key: kes_public_key.0.clone(),
+                vrf_public_key: vrf_public_key.0.clone(),
             },
         }
         .into()
@@ -1329,7 +1329,7 @@ pub struct Fee(FeeVariant);
 #[wasm_bindgen]
 impl Fee {
     /// Linear algorithm, this is formed by: `coefficient * (#inputs + #outputs) + constant + certificate * #certificate
-    pub fn linear_fee(constant: Value, coefficient: Value, certificate: Value) -> Fee {
+    pub fn linear_fee(constant: &Value, coefficient: &Value, certificate: &Value) -> Fee {
         Fee(FeeVariant::Linear(fee::LinearFee::new(
             *constant.0.as_ref(),
             *coefficient.0.as_ref(),
@@ -1337,13 +1337,13 @@ impl Fee {
         )))
     }
 
-    pub fn calculate(&self, tx: Transaction) -> Value {
+    pub fn calculate(&self, tx: &Transaction) -> Value {
         let fee_algorithm = match &self.0 {
             FeeVariant::Linear(algorithm) => algorithm,
         };
 
         use fee::FeeAlgorithm;
-        let v = map_payloads!(tx.0, tx, {
+        let v = map_payloads!(&tx.0, tx, {
             fee_algorithm.calculate(
                 tx.as_slice().payload().to_certificate_slice(),
                 tx.nb_inputs(),
@@ -1378,9 +1378,9 @@ impl From<tx::Witness> for Witness {
 impl Witness {
     /// Generate Witness for an utxo-based transaction Input
     pub fn for_utxo(
-        genesis_hash: Hash,
-        transaction_id: TransactionSignDataHash,
-        secret_key: PrivateKey,
+        genesis_hash: &Hash,
+        transaction_id: &TransactionSignDataHash,
+        secret_key: &PrivateKey,
     ) -> Witness {
         Witness(tx::Witness::new_utxo(
             &genesis_hash.0,
@@ -1397,10 +1397,10 @@ impl Witness {
     /// Generate Witness for an account based transaction Input
     /// the account-spending-counter should be incremented on each transaction from this account
     pub fn for_account(
-        genesis_hash: Hash,
-        transaction_id: TransactionSignDataHash,
-        secret_key: PrivateKey,
-        account_spending_counter: SpendingCounter,
+        genesis_hash: &Hash,
+        transaction_id: &TransactionSignDataHash,
+        secret_key: &PrivateKey,
+        account_spending_counter: &SpendingCounter,
     ) -> Witness {
         Witness(tx::Witness::new_account(
             &genesis_hash.0,
@@ -1469,10 +1469,10 @@ impl From<chain::fragment::Fragment> for Fragment {
 
 #[wasm_bindgen]
 impl Fragment {
-    pub fn from_transaction(tx: Transaction) -> Fragment {
+    pub fn from_transaction(tx: &Transaction) -> Fragment {
         use chain::fragment::Fragment as F;
         use TaggedTransaction as T;
-        match tx.0 {
+        match tx.0.clone() {
             T::NoExtra(auth_tx) => F::Transaction(auth_tx),
             T::PoolRegistration(auth_tx) => F::PoolRegistration(auth_tx),
             T::PoolRetirement(auth_tx) => F::PoolRetirement(auth_tx),
