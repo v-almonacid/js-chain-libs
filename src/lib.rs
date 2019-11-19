@@ -230,6 +230,10 @@ impl Address {
     ) -> Address {
         chain_addr::Address(discrimination.into(), chain_addr::Kind::Account(key.0)).into()
     }
+
+    pub fn get_kind(&self) -> AddressKind {
+        AddressKind::from(self.0.to_kind_type())
+    }
 }
 
 impl From<chain_addr::Address> for Address {
@@ -257,6 +261,35 @@ impl Into<chain_addr::Discrimination> for AddressDiscrimination {
         match self {
             AddressDiscrimination::Production => chain_addr::Discrimination::Production,
             AddressDiscrimination::Test => chain_addr::Discrimination::Test,
+        }
+    }
+}
+
+#[wasm_bindgen]
+pub enum AddressKind {
+    Single,
+    Group,
+    Account,
+    Multisig,
+}
+
+impl Into<chain_addr::KindType> for AddressKind {
+    fn into(self) -> chain_addr::KindType {
+        match self {
+            AddressKind::Single => chain_addr::KindType::Single,
+            AddressKind::Group => chain_addr::KindType::Group,
+            AddressKind::Account => chain_addr::KindType::Account,
+            AddressKind::Multisig => chain_addr::KindType::Multisig,
+        }
+    }
+}
+impl From<chain_addr::KindType> for AddressKind {
+    fn from(kind: chain_addr::KindType) -> Self {
+        match kind {
+            chain_addr::KindType::Single => AddressKind::Single,
+            chain_addr::KindType::Group => AddressKind::Group,
+            chain_addr::KindType::Account => AddressKind::Account,
+            chain_addr::KindType::Multisig => AddressKind::Multisig,
         }
     }
 }
