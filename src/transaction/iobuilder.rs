@@ -171,4 +171,40 @@ impl InputOutput {
         let v: Vec<_> = self.0.outputs.iter().map(|i| (*i).clone().into()).collect();
         Outputs(v)
     }
+
+    /// Estimate fee with the currently added inputs, outputs and certificate based on the given algorithm
+    #[wasm_bindgen]
+    pub fn estimate_fee(&self, fee: &Fee, payload: &Payload) -> Value {
+        let fee_algorithm = match fee.0 {
+            FeeVariant::Linear(fee_algorithm) => fee_algorithm,
+        };
+        use tx::Payload as _;
+        map_payload!(&payload.0, |payload| Value(
+            self.0
+                .estimate_fee(payload.payload_data().borrow(), &fee_algorithm)
+        ))
+    }
+
+    #[wasm_bindgen]
+    pub fn get_balance(&self, payload: &Payload, fee: &Fee) -> Result<Balance, JsValue> {
+        let fee_algorithm = match fee.0 {
+            FeeVariant::Linear(fee_algorithm) => fee_algorithm,
+        };
+        use tx::Payload as _;
+        let balance = map_payload!(&payload.0, |payload| self
+            .0
+            .get_balance(payload.payload_data().borrow(), &fee_algorithm));
+
+        balance
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))
+            .map(|balance| balance.into())
+    }
+
+    #[wasm_bindgen]
+    pub fn get_balance_without_fee(&self) -> Result<Balance, JsValue> {
+        self.0
+            .get_balance_without_fee()
+            .map(|balance| balance.into())
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))
+    }
 }
