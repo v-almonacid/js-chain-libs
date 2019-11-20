@@ -1121,7 +1121,10 @@ pub struct PoolDelegationRatio {
 impl PoolDelegationRatio {
     //TODO: Add constructor attribute
     pub fn new(pool: &PoolId, part: u8) -> PoolDelegationRatio {
-        Self { pool: pool.clone(), part }
+        Self {
+            pool: pool.clone(),
+            part,
+        }
     }
 }
 
@@ -1147,7 +1150,9 @@ impl StakeDelegation {
     /// Create a stake delegation object from account (stake key) to pool_id
     pub fn new(delegation_type: &DelegationType, account: &PublicKey) -> StakeDelegation {
         certificate::StakeDelegation {
-            account_id: tx::UnspecifiedAccountIdentifier::from_single_account(account.0.clone().into()),
+            account_id: tx::UnspecifiedAccountIdentifier::from_single_account(
+                account.0.clone().into(),
+            ),
             delegation: delegation_type.0.clone(),
         }
         .into()

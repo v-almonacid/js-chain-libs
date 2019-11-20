@@ -273,7 +273,10 @@ crate::impl_collection!(IndexSignatures, IndexedSignature);
 #[wasm_bindgen]
 impl IndexedSignature {
     pub fn new(index: u8, signature: &AccountBindingSignature) -> IndexedSignature {
-        Self { index, signature: signature.clone() }
+        Self {
+            index,
+            signature: signature.clone(),
+        }
     }
 }
 

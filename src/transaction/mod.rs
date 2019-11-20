@@ -2,7 +2,9 @@ mod iobuilder;
 mod txbuilder;
 use super::certificate;
 use super::tx;
-use crate::{Certificate, Input, Inputs, Output, Outputs, TransactionSignDataHash};
+use crate::{
+    Certificate, Input, Inputs, Output, Outputs, TransactionSignDataHash, Witness, Witnesses,
+};
 pub use iobuilder::*;
 pub use txbuilder::*;
 use wasm_bindgen::prelude::*;
@@ -45,6 +47,19 @@ impl TaggedTransaction {
         map_payloads!(self, tx, tx.hash().into())
     }
 
+    fn witnesses(&self) -> Witnesses {
+        map_payloads!(
+            self,
+            tx,
+            tx.as_slice()
+                .witnesses()
+                .iter()
+                .map(|witness| Witness(witness.clone()))
+                .collect::<Vec<Witness>>()
+                .into()
+        )
+    }
+
     fn inputs(&self) -> Vec<tx::Input> {
         map_payloads!(self, tx, tx.as_slice().inputs().iter().collect())
     }
@@ -77,6 +92,10 @@ impl Transaction {
     /// Get the transaction id, needed to compute its signature
     pub fn id(&self) -> TransactionSignDataHash {
         self.0.id()
+    }
+
+    pub fn witnesses(&self) -> Witnesses {
+        self.0.witnesses()
     }
 
     /// Get collection of the inputs in the transaction (this allocates new copies of all the values)
