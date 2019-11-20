@@ -99,10 +99,6 @@ impl Transaction {
             .into()
     }
 
-    pub fn clone(&self) -> Transaction {
-        Transaction(self.0.clone())
-    }
-
     // Certificate if it exists, otherwise null
     pub fn certificate(&self) -> Option<Certificate> {
         self.0.certificate()

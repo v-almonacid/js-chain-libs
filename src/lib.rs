@@ -22,6 +22,180 @@ use wasm_bindgen::prelude::*;
 
 pub use transaction::*;
 
+#[wasm_bindgen]
+pub struct Bip32PrivateKey(crypto::SecretKey<crypto::Ed25519Bip32>);
+
+#[wasm_bindgen]
+impl Bip32PrivateKey {
+    /// derive this private key with the given index.
+    ///
+    /// # Security considerations
+    ///
+    /// * hard derivation index cannot be soft derived with the public key
+    ///
+    /// # Hard derivation vs Soft derivation
+    ///
+    /// If you pass an index below 0x80000000 then it is a soft derivation.
+    /// The advantage of soft derivation is that it is possible to derive the
+    /// public key too. I.e. derivation the private key with a soft derivation
+    /// index and then retrieving the associated public key is equivalent to
+    /// deriving the public key associated to the parent private key.
+    ///
+    /// Hard derivation index does not allow public key derivation.
+    ///
+    /// This is why deriving the private key should not fail while deriving
+    /// the public key may fail (if the derivation index is invalid).
+    ///
+    pub fn derive(&self, index: u32) -> Bip32PrivateKey {
+        Bip32PrivateKey(crypto::derive::derive_sk_ed25519(&self.0, index))
+    }
+
+    pub fn generate_ed25519_bip32() -> Result<Bip32PrivateKey, JsValue> {
+        OsRng::new()
+            .map(crypto::SecretKey::<crypto::Ed25519Bip32>::generate)
+            .map(Bip32PrivateKey)
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))
+    }
+
+    pub fn to_raw_key(&self) -> PrivateKey {
+        PrivateKey(key::EitherEd25519SecretKey::Extended(
+            crypto::derive::to_raw_sk(&self.0),
+        ))
+    }
+
+    pub fn to_public(&self) -> Bip32PublicKey {
+        Bip32PublicKey(self.0.to_public().into())
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Bip32PrivateKey, JsValue> {
+        crypto::SecretKey::<crypto::Ed25519Bip32>::from_binary(bytes)
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))
+            .map(Bip32PrivateKey)
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.0.as_ref().to_vec()
+    }
+
+    pub fn from_bech32(bech32_str: &str) -> Result<Bip32PrivateKey, JsValue> {
+        crypto::SecretKey::try_from_bech32_str(&bech32_str)
+            .map(Bip32PrivateKey)
+            .map_err(|_| JsValue::from_str("Invalid secret key"))
+    }
+
+    pub fn to_bech32(&self) -> String {
+        self.0.to_bech32_str()
+    }
+
+    pub fn from_bip39_entropy(entropy: &[u8], password: &[u8]) -> Bip32PrivateKey {
+        Bip32PrivateKey(crypto::derive::from_bip39_entropy(&entropy, &password))
+    }
+}
+
+#[wasm_bindgen]
+pub struct Bip32PublicKey(crypto::PublicKey<crypto::Ed25519Bip32>);
+
+#[wasm_bindgen]
+impl Bip32PublicKey {
+    /// derive this public key with the given index.
+    ///
+    /// # Errors
+    ///
+    /// If the index is not a soft derivation index (< 0x80000000) then
+    /// calling this method will fail.
+    ///
+    /// # Security considerations
+    ///
+    /// * hard derivation index cannot be soft derived with the public key
+    ///
+    /// # Hard derivation vs Soft derivation
+    ///
+    /// If you pass an index below 0x80000000 then it is a soft derivation.
+    /// The advantage of soft derivation is that it is possible to derive the
+    /// public key too. I.e. derivation the private key with a soft derivation
+    /// index and then retrieving the associated public key is equivalent to
+    /// deriving the public key associated to the parent private key.
+    ///
+    /// Hard derivation index does not allow public key derivation.
+    ///
+    /// This is why deriving the private key should not fail while deriving
+    /// the public key may fail (if the derivation index is invalid).
+    ///
+    pub fn derive(&self, index: u32) -> Result<Bip32PublicKey, JsValue> {
+        crypto::derive::derive_pk_ed25519(&self.0, index)
+            .map(Bip32PublicKey)
+            .map_err(|e| JsValue::from_str(&format! {"{:?}", e}))
+    }
+
+    pub fn to_raw_key(&self) -> PublicKey {
+        PublicKey(crypto::derive::to_raw_pk(&self.0))
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Bip32PublicKey, JsValue> {
+        crypto::PublicKey::<crypto::Ed25519Bip32>::from_binary(bytes)
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))
+            .map(Bip32PublicKey)
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.0.as_ref().to_vec()
+    }
+
+    pub fn from_bech32(bech32_str: &str) -> Result<Bip32PublicKey, JsValue> {
+        crypto::PublicKey::try_from_bech32_str(&bech32_str)
+            .map(Bip32PublicKey)
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))
+    }
+
+    pub fn to_bech32(&self) -> String {
+        self.0.to_bech32_str()
+    }
+}
+
+macro_rules! impl_signature {
+    ($name:ident, $signee_type:ty, $verifier_type:ty) => {
+        #[wasm_bindgen]
+        pub struct $name(crypto::Signature<$signee_type, $verifier_type>);
+
+        #[wasm_bindgen]
+        impl $name {
+            pub fn as_bytes(&self) -> Vec<u8> {
+                self.0.as_ref().to_vec()
+            }
+
+            pub fn to_bech32(&self) -> String {
+                self.0.to_bech32_str()
+            }
+
+            pub fn to_hex(&self) -> String {
+                hex::encode(&self.0.as_ref())
+            }
+
+            pub fn from_bytes(bytes: &[u8]) -> Result<$name, JsValue> {
+                crypto::Signature::from_binary(bytes)
+                    .map($name)
+                    .map_err(|e| JsValue::from_str(&format!("{}", e)))
+            }
+
+            pub fn from_bech32(bech32_str: &str) -> Result<$name, JsValue> {
+                crypto::Signature::try_from_bech32_str(&bech32_str)
+                    .map($name)
+                    .map_err(|e| JsValue::from_str(&format!("{}", e)))
+            }
+
+            pub fn from_hex(input: &str) -> Result<$name, JsValue> {
+                crypto::Signature::from_str(input)
+                    .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
+                    .map($name)
+            }
+        }
+    };
+}
+
+impl_signature!(Ed25519Signature, Vec<u8>, crypto::Ed25519);
+impl_signature!(AccountWitness, tx::WitnessAccountData, crypto::Ed25519);
+impl_signature!(UtxoWitness, tx::WitnessUtxoData, crypto::Ed25519);
+
 /// ED25519 signing key, either normal or extended
 #[wasm_bindgen]
 pub struct PrivateKey(key::EitherEd25519SecretKey);
@@ -80,6 +254,13 @@ impl PrivateKey {
         }
     }
 
+    pub fn as_bytes(&self) -> Vec<u8> {
+        match self.0 {
+            key::EitherEd25519SecretKey::Normal(ref secret) => secret.as_ref().to_vec(),
+            key::EitherEd25519SecretKey::Extended(ref secret) => secret.as_ref().to_vec(),
+        }
+    }
+
     pub fn from_extended_bytes(bytes: &[u8]) -> Result<PrivateKey, JsValue> {
         crypto::SecretKey::from_binary(bytes)
             .map(key::EitherEd25519SecretKey::Extended)
@@ -92,6 +273,10 @@ impl PrivateKey {
             .map(key::EitherEd25519SecretKey::Normal)
             .map(PrivateKey)
             .map_err(|_| JsValue::from_str("Invalid normal secret key"))
+    }
+
+    pub fn sign(&self, message: &[u8]) -> Ed25519Signature {
+        Ed25519Signature(self.0.sign(&message.to_vec()))
     }
 }
 
@@ -119,6 +304,10 @@ impl PublicKey {
             .map_err(|_| JsValue::from_str("Malformed public key"))
     }
 
+    pub fn to_bech32(&self) -> String {
+        self.0.to_bech32_str()
+    }
+
     pub fn as_bytes(&self) -> Vec<u8> {
         self.0.as_ref().to_vec()
     }
@@ -127,6 +316,10 @@ impl PublicKey {
         crypto::PublicKey::from_binary(bytes)
             .map_err(|e| JsValue::from_str(&format!("{}", e)))
             .map(PublicKey)
+    }
+
+    pub fn verify(&self, data: &[u8], signature: &Ed25519Signature) -> bool {
+        signature.0.verify_slice(&self.0, data) == crypto::Verification::Success
     }
 }
 
@@ -148,14 +341,88 @@ impl PublicKeys {
         self.0[index].clone()
     }
 
-    pub fn add(&mut self, key: PublicKey) {
-        self.0.push(key);
+    pub fn add(&mut self, key: &PublicKey) {
+        self.0.push(key.clone());
     }
 }
 
 //-----------------------------//
 //----------Address------------//
 //-----------------------------//
+
+#[wasm_bindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SingleAddress(
+    chain_addr::Discrimination,
+    crypto::PublicKey<crypto::Ed25519>,
+);
+
+#[wasm_bindgen]
+impl SingleAddress {
+    pub fn get_spending_key(&self) -> PublicKey {
+        PublicKey::from(self.1.clone())
+    }
+
+    pub fn to_base_address(&self) -> Address {
+        Address::single_from_public_key(&self.get_spending_key(), self.0.into())
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GroupAddress(
+    chain_addr::Discrimination,
+    crypto::PublicKey<crypto::Ed25519>,
+    crypto::PublicKey<crypto::Ed25519>,
+);
+
+#[wasm_bindgen]
+impl GroupAddress {
+    pub fn get_spending_key(&self) -> PublicKey {
+        PublicKey::from(self.1.clone())
+    }
+    pub fn get_account_key(&self) -> PublicKey {
+        PublicKey::from(self.2.clone())
+    }
+    pub fn to_base_address(&self) -> Address {
+        Address::delegation_from_public_key(
+            &self.get_spending_key(),
+            &self.get_account_key(),
+            self.0.into(),
+        )
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AccountAddress(
+    chain_addr::Discrimination,
+    crypto::PublicKey<crypto::Ed25519>,
+);
+
+#[wasm_bindgen]
+impl AccountAddress {
+    pub fn get_account_key(&self) -> PublicKey {
+        PublicKey::from(self.1.clone())
+    }
+    pub fn to_base_address(&self) -> Address {
+        Address::account_from_public_key(&self.get_account_key(), self.0.into())
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MultisigAddress(chain_addr::Discrimination, [u8; 32]);
+
+#[wasm_bindgen]
+impl MultisigAddress {
+    pub fn get_merkle_root(&self) -> Vec<u8> {
+        self.1.to_vec()
+    }
+    pub fn to_base_address(&self) -> Result<Address, JsValue> {
+        Address::multisig_from_merkle_root(self.get_merkle_root().as_slice(), self.0.into())
+    }
+}
 
 /// An address of any type, this can be one of
 /// * A utxo-based address without delegation (single)
@@ -167,6 +434,18 @@ pub struct Address(chain_addr::Address);
 
 #[wasm_bindgen]
 impl Address {
+    pub fn from_bytes(bytes: Uint8Array) -> Result<Address, JsValue> {
+        let mut slice: Box<[u8]> = vec![0; bytes.length() as usize].into_boxed_slice();
+        bytes.copy_to(&mut *slice);
+        chain_addr::Address::deserialize(&*slice)
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))
+            .map(Address)
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.0.serialize_as_vec().unwrap()
+    }
+
     //XXX: Maybe this should be from_bech32?
     /// Construct Address from its bech32 representation
     /// Example
@@ -204,31 +483,104 @@ impl Address {
     /// let address = Address.single_from_public_key(public_key, AddressDiscrimination.Test);
     /// ```
     pub fn single_from_public_key(
-        key: PublicKey,
-        discrimination: AddressDiscrimination,
-    ) -> Address {
-        chain_addr::Address(discrimination.into(), chain_addr::Kind::Single(key.0)).into()
-    }
-
-    /// Construct a non-account address from a pair of public keys, delegating founds from the first to the second
-    pub fn delegation_from_public_key(
-        key: PublicKey,
-        delegation: PublicKey,
+        key: &PublicKey,
         discrimination: AddressDiscrimination,
     ) -> Address {
         chain_addr::Address(
             discrimination.into(),
-            chain_addr::Kind::Group(key.0, delegation.0),
+            chain_addr::Kind::Single(key.0.clone()),
+        )
+        .into()
+    }
+
+    /// Construct a non-account address from a pair of public keys, delegating founds from the first to the second
+    pub fn delegation_from_public_key(
+        key: &PublicKey,
+        delegation: &PublicKey,
+        discrimination: AddressDiscrimination,
+    ) -> Address {
+        chain_addr::Address(
+            discrimination.into(),
+            chain_addr::Kind::Group(key.0.clone(), delegation.0.clone()),
         )
         .into()
     }
 
     /// Construct address of account type from a public key
     pub fn account_from_public_key(
-        key: PublicKey,
+        key: &PublicKey,
         discrimination: AddressDiscrimination,
     ) -> Address {
-        chain_addr::Address(discrimination.into(), chain_addr::Kind::Account(key.0)).into()
+        chain_addr::Address(
+            discrimination.into(),
+            chain_addr::Kind::Account(key.0.clone()),
+        )
+        .into()
+    }
+
+    pub fn multisig_from_merkle_root(
+        merkle_root: &[u8],
+        discrimination: AddressDiscrimination,
+    ) -> Result<Address, JsValue> {
+        match merkle_root.len() {
+            32 => {
+                let mut sized_root = [0; 32];
+                sized_root.copy_from_slice(&merkle_root);
+                Ok(chain_addr::Address(
+                    discrimination.into(),
+                    chain_addr::Kind::Multisig(sized_root),
+                )
+                .into())
+            }
+            _ => Err(JsValue::from_str("Invalid merkle root size")),
+        }
+    }
+
+    pub fn get_discrimination(&self) -> AddressDiscrimination {
+        AddressDiscrimination::from(self.0.discrimination())
+    }
+
+    pub fn get_kind(&self) -> AddressKind {
+        AddressKind::from(self.0.to_kind_type())
+    }
+
+    pub fn to_single_address(&self) -> Option<SingleAddress> {
+        match self.0.kind() {
+            chain_addr::Kind::Single(ref spending_key) => {
+                Some(SingleAddress(self.0.discrimination(), spending_key.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn to_group_address(&self) -> Option<GroupAddress> {
+        match self.0.kind() {
+            chain_addr::Kind::Group(ref spending_key, ref account_key) => Some(GroupAddress(
+                self.0.discrimination(),
+                spending_key.clone(),
+                account_key.clone(),
+            )),
+            _ => None,
+        }
+    }
+
+    pub fn to_account_address(&self) -> Option<AccountAddress> {
+        match self.0.kind() {
+            chain_addr::Kind::Account(ref account_key) => {
+                Some(AccountAddress(self.0.discrimination(), account_key.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn to_multisig_address(&self) -> Option<MultisigAddress> {
+        match self.0.kind() {
+            chain_addr::Kind::Multisig(ref merkle_root) => Some(MultisigAddress(
+                self.0.discrimination(),
+                merkle_root.clone(),
+            )),
+            _ => None,
+        }
     }
 }
 
@@ -260,6 +612,43 @@ impl Into<chain_addr::Discrimination> for AddressDiscrimination {
         }
     }
 }
+impl From<chain_addr::Discrimination> for AddressDiscrimination {
+    fn from(discrimination: chain_addr::Discrimination) -> Self {
+        match discrimination {
+            chain_addr::Discrimination::Production => AddressDiscrimination::Production,
+            chain_addr::Discrimination::Test => AddressDiscrimination::Test,
+        }
+    }
+}
+
+#[wasm_bindgen]
+pub enum AddressKind {
+    Single,
+    Group,
+    Account,
+    Multisig,
+}
+
+impl Into<chain_addr::KindType> for AddressKind {
+    fn into(self) -> chain_addr::KindType {
+        match self {
+            AddressKind::Single => chain_addr::KindType::Single,
+            AddressKind::Group => chain_addr::KindType::Group,
+            AddressKind::Account => chain_addr::KindType::Account,
+            AddressKind::Multisig => chain_addr::KindType::Multisig,
+        }
+    }
+}
+impl From<chain_addr::KindType> for AddressKind {
+    fn from(kind: chain_addr::KindType) -> Self {
+        match kind {
+            chain_addr::KindType::Single => AddressKind::Single,
+            chain_addr::KindType::Group => AddressKind::Group,
+            chain_addr::KindType::Account => AddressKind::Account,
+            chain_addr::KindType::Multisig => AddressKind::Multisig,
+        }
+    }
+}
 
 impl_collection!(Outputs, Output);
 impl_collection!(Inputs, Input);
@@ -285,8 +674,8 @@ impl OutputPolicy {
     }
 
     /// use the given address as the only change address
-    pub fn one(address: Address) -> OutputPolicy {
-        tx::OutputPolicy::One(address.0).into()
+    pub fn one(address: &Address) -> OutputPolicy {
+        tx::OutputPolicy::One(address.0.clone()).into()
     }
 }
 
@@ -366,7 +755,7 @@ impl Input {
         Input(tx::Input::from_utxo(utxo_pointer.0))
     }
 
-    pub fn from_account(account: &Account, v: Value) -> Self {
+    pub fn from_account(account: &Account, v: &Value) -> Self {
         let identifier = account.to_identifier();
         Input(tx::Input::from_account(identifier.0, v.0))
     }
@@ -431,9 +820,9 @@ impl From<tx::UtxoPointer> for UtxoPointer {
 
 #[wasm_bindgen]
 impl UtxoPointer {
-    pub fn new(fragment_id: FragmentId, output_index: u8, value: Value) -> UtxoPointer {
+    pub fn new(fragment_id: &FragmentId, output_index: u8, value: &Value) -> UtxoPointer {
         UtxoPointer(tx::UtxoPointer {
-            transaction_id: fragment_id.0,
+            transaction_id: fragment_id.0.clone(),
             output_index,
             value: value.0,
         })
@@ -477,8 +866,8 @@ impl Account {
         chain_addr::Address(discriminant.into(), kind).into()
     }
 
-    pub fn single_from_public_key(key: PublicKey) -> Account {
-        Account(tx::AccountIdentifier::Single(key.0.into()))
+    pub fn single_from_public_key(key: &PublicKey) -> Account {
+        Account(tx::AccountIdentifier::Single(key.0.clone().into()))
     }
 
     pub fn to_identifier(&self) -> AccountIdentifier {
@@ -691,12 +1080,12 @@ impl DelegationType {
         Self(chain::account::DelegationType::NonDelegated)
     }
 
-    pub fn full(pool_id: PoolId) -> Self {
-        Self(chain::account::DelegationType::Full(pool_id.0))
+    pub fn full(pool_id: &PoolId) -> Self {
+        Self(chain::account::DelegationType::Full(pool_id.0.clone()))
     }
 
-    pub fn ratio(r: DelegationRatio) -> Self {
-        Self(chain::account::DelegationType::Ratio(r.0))
+    pub fn ratio(r: &DelegationRatio) -> Self {
+        Self(chain::account::DelegationType::Ratio(r.0.clone()))
     }
 }
 
@@ -723,8 +1112,8 @@ pub struct PoolDelegationRatio {
 #[wasm_bindgen]
 impl PoolDelegationRatio {
     //TODO: Add constructor attribute
-    pub fn new(pool: PoolId, part: u8) -> PoolDelegationRatio {
-        Self { pool, part }
+    pub fn new(pool: &PoolId, part: u8) -> PoolDelegationRatio {
+        Self { pool: pool.clone(), part }
     }
 }
 
@@ -733,7 +1122,7 @@ impl_collection!(PoolDelegationRatios, PoolDelegationRatio);
 #[wasm_bindgen]
 impl DelegationRatio {
     //TODO: Add constructor attribute
-    pub fn new(parts: u8, pools: PoolDelegationRatios) -> Option<DelegationRatio> {
+    pub fn new(parts: u8, pools: &PoolDelegationRatios) -> Option<DelegationRatio> {
         let pools = pools
             .0
             .iter()
@@ -748,10 +1137,10 @@ impl DelegationRatio {
 #[wasm_bindgen]
 impl StakeDelegation {
     /// Create a stake delegation object from account (stake key) to pool_id
-    pub fn new(delegation_type: DelegationType, account: PublicKey) -> StakeDelegation {
+    pub fn new(delegation_type: &DelegationType, account: &PublicKey) -> StakeDelegation {
         certificate::StakeDelegation {
-            account_id: tx::UnspecifiedAccountIdentifier::from_single_account(account.0.into()),
-            delegation: delegation_type.0,
+            account_id: tx::UnspecifiedAccountIdentifier::from_single_account(account.0.clone().into()),
+            delegation: delegation_type.0.clone(),
         }
         .into()
     }
@@ -826,13 +1215,13 @@ pub enum CertificateType {
 #[wasm_bindgen]
 impl Certificate {
     /// Create a Certificate for StakeDelegation
-    pub fn stake_delegation(stake_delegation: StakeDelegation) -> Certificate {
-        certificate::Certificate::StakeDelegation(stake_delegation.0).into()
+    pub fn stake_delegation(stake_delegation: &StakeDelegation) -> Certificate {
+        certificate::Certificate::StakeDelegation(stake_delegation.0.clone()).into()
     }
 
     /// Create a Certificate for PoolRegistration
-    pub fn stake_pool_registration(pool_registration: PoolRegistration) -> Certificate {
-        certificate::Certificate::PoolRegistration(pool_registration.0).into()
+    pub fn stake_pool_registration(pool_registration: &PoolRegistration) -> Certificate {
+        certificate::Certificate::PoolRegistration(pool_registration.0.clone()).into()
     }
 
     /// Create a Certificate for PoolRetirement
@@ -887,28 +1276,28 @@ impl Certificate {
 impl PoolRegistration {
     #[wasm_bindgen(constructor)]
     pub fn new(
-        serial: U128,
-        owners: PublicKeys,
-        operators: PublicKeys,
+        serial: &U128,
+        owners: &PublicKeys,
+        operators: &PublicKeys,
         management_threshold: u8,
-        start_validity: TimeOffsetSeconds,
-        kes_public_key: KesPublicKey,
-        vrf_public_key: VrfPublicKey,
+        start_validity: &TimeOffsetSeconds,
+        kes_public_key: &KesPublicKey,
+        vrf_public_key: &VrfPublicKey,
     ) -> PoolRegistration {
         use chain::certificate::PoolPermissions;
         chain::certificate::PoolRegistration {
-            serial: serial.0,
-            owners: owners.0.into_iter().map(|key| key.0).collect(),
-            operators: operators.0.into_iter().map(|key| key.0).collect(),
+            serial: serial.0.clone(),
+            owners: owners.0.clone().into_iter().map(|key| key.0).collect(),
+            operators: operators.0.clone().into_iter().map(|key| key.0).collect(),
             permissions: PoolPermissions::new(management_threshold),
-            start_validity: start_validity.0,
+            start_validity: start_validity.0.clone(),
             // TODO: Hardcoded parameter
             rewards: chain::rewards::TaxType::zero(),
             // TODO: Hardcoded parameter
             reward_account: None,
             keys: chain::leadership::genesis::GenesisPraosLeader {
-                kes_public_key: kes_public_key.0,
-                vrf_public_key: vrf_public_key.0,
+                kes_public_key: kes_public_key.0.clone(),
+                vrf_public_key: vrf_public_key.0.clone(),
             },
         }
         .into()
@@ -1102,7 +1491,7 @@ pub struct Fee(FeeVariant);
 #[wasm_bindgen]
 impl Fee {
     /// Linear algorithm, this is formed by: `coefficient * (#inputs + #outputs) + constant + certificate * #certificate
-    pub fn linear_fee(constant: Value, coefficient: Value, certificate: Value) -> Fee {
+    pub fn linear_fee(constant: &Value, coefficient: &Value, certificate: &Value) -> Fee {
         Fee(FeeVariant::Linear(fee::LinearFee::new(
             *constant.0.as_ref(),
             *coefficient.0.as_ref(),
@@ -1110,13 +1499,13 @@ impl Fee {
         )))
     }
 
-    pub fn calculate(&self, tx: Transaction) -> Value {
+    pub fn calculate(&self, tx: &Transaction) -> Value {
         let fee_algorithm = match &self.0 {
             FeeVariant::Linear(algorithm) => algorithm,
         };
 
         use fee::FeeAlgorithm;
-        let v = map_payloads!(tx.0, tx, {
+        let v = map_payloads!(&tx.0, tx, {
             fee_algorithm.calculate(
                 tx.as_slice().payload().to_certificate_slice(),
                 tx.nb_inputs(),
@@ -1151,9 +1540,9 @@ impl From<tx::Witness> for Witness {
 impl Witness {
     /// Generate Witness for an utxo-based transaction Input
     pub fn for_utxo(
-        genesis_hash: Hash,
-        transaction_id: TransactionSignDataHash,
-        secret_key: PrivateKey,
+        genesis_hash: &Hash,
+        transaction_id: &TransactionSignDataHash,
+        secret_key: &PrivateKey,
     ) -> Witness {
         Witness(tx::Witness::new_utxo(
             &genesis_hash.0,
@@ -1162,13 +1551,18 @@ impl Witness {
         ))
     }
 
+    // Witness for a utxo-based transaction generated externally (such as hardware wallets)
+    pub fn from_external_utxo(witness: &UtxoWitness) -> Witness {
+        Witness(tx::Witness::Utxo(witness.0.clone()))
+    }
+
     /// Generate Witness for an account based transaction Input
     /// the account-spending-counter should be incremented on each transaction from this account
     pub fn for_account(
-        genesis_hash: Hash,
-        transaction_id: TransactionSignDataHash,
-        secret_key: PrivateKey,
-        account_spending_counter: SpendingCounter,
+        genesis_hash: &Hash,
+        transaction_id: &TransactionSignDataHash,
+        secret_key: &PrivateKey,
+        account_spending_counter: &SpendingCounter,
     ) -> Witness {
         Witness(tx::Witness::new_account(
             &genesis_hash.0,
@@ -1176,6 +1570,11 @@ impl Witness {
             &account_spending_counter.0,
             &secret_key.0,
         ))
+    }
+
+    // Witness for a account-based transaction generated externally (such as hardware wallets)
+    pub fn from_external_account(witness: &AccountWitness) -> Witness {
+        Witness(tx::Witness::Account(witness.0.clone()))
     }
 
     /// Get string representation
@@ -1232,10 +1631,10 @@ impl From<chain::fragment::Fragment> for Fragment {
 
 #[wasm_bindgen]
 impl Fragment {
-    pub fn from_transaction(tx: Transaction) -> Fragment {
+    pub fn from_transaction(tx: &Transaction) -> Fragment {
         use chain::fragment::Fragment as F;
         use TaggedTransaction as T;
-        match tx.0 {
+        match tx.0.clone() {
             T::NoExtra(auth_tx) => F::Transaction(auth_tx),
             T::PoolRegistration(auth_tx) => F::PoolRegistration(auth_tx),
             T::PoolRetirement(auth_tx) => F::PoolRetirement(auth_tx),
