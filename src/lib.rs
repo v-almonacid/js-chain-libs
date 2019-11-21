@@ -1113,8 +1113,8 @@ impl DelegationType {
     }
 
     pub fn get_full(&self) -> Option<PoolId> {
-        match self.0 {
-            chain::account::DelegationType::Full(pool_id) => Some(pool_id.into()),
+        match &self.0 {
+            chain::account::DelegationType::Full(pool_id) => Some(pool_id.clone().into()),
             _ => None,
         }
     }
