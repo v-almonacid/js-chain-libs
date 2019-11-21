@@ -1084,6 +1084,13 @@ impl From<chain::account::DelegationType> for DelegationType {
 }
 
 #[wasm_bindgen]
+pub enum DelegationKind {
+    NonDelegated,
+    Full,
+    Ratio,
+}
+
+#[wasm_bindgen]
 impl DelegationType {
     pub fn non_delegated() -> Self {
         Self(chain::account::DelegationType::NonDelegated)
@@ -1095,6 +1102,21 @@ impl DelegationType {
 
     pub fn ratio(r: &DelegationRatio) -> Self {
         Self(chain::account::DelegationType::Ratio(r.0.clone()))
+    }
+
+    pub fn get_kind(&self) -> DelegationKind {
+        match self.0 {
+            chain::account::DelegationType::NonDelegated => DelegationKind::NonDelegated,
+            chain::account::DelegationType::Full(_) => DelegationKind::Full,
+            chain::account::DelegationType::Ratio(_) => DelegationKind::Ratio,
+        }
+    }
+
+    pub fn get_full(&self) -> Option<PoolId> {
+        match self.0 {
+            chain::account::DelegationType::Full(pool_id) => Some(pool_id.into()),
+            _ => None,
+        }
     }
 }
 
