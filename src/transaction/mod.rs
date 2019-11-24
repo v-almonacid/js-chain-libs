@@ -93,10 +93,6 @@ impl Transaction {
         self.0.id()
     }
 
-    pub fn witnesses(&self) -> Witnesses {
-        self.0.witnesses()
-    }
-
     /// Get collection of the inputs in the transaction (this allocates new copies of all the values)
     pub fn inputs(&self) -> Inputs {
         self.0
@@ -120,5 +116,9 @@ impl Transaction {
     // Certificate if it exists, otherwise null
     pub fn certificate(&self) -> Option<Certificate> {
         self.0.certificate()
+    }
+
+    pub fn witnesses(&self) -> Witnesses {
+        self.0.witnesses()
     }
 }
