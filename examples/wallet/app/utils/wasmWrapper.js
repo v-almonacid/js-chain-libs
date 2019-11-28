@@ -2,27 +2,46 @@
 import config from 'config';
 import type { AccountKeys, NodeSettings } from '../reducers/types';
 import type {
-  PoolId as InternalPoolId,
   PrivateKey as InternalPrivateKey,
   Counter,
+  Delegation,
   TransactionOutput
 } from '../models';
 import feeCalculator from './feeCalculator';
+import { totalParts } from './proportionsHelper';
 
 const wasmBindings = import('js-chain-libs/js_chain_libs');
 export async function getAccountFromPrivateKey(
   secret: InternalPrivateKey
 ): Promise<AccountKeys> {
+  const { PrivateKey } = await wasmBindings;
+  const privateKey: PrivateKey = PrivateKey.from_bech32(secret);
+  return getAccountDataFromPrivateKey(privateKey);
+}
+
+export async function getAccountFromSeed(
+  seed: Uint8Array
+): Promise<AccountKeys> {
+  const { PrivateKey } = await wasmBindings;
+  const privateKey: PrivateKey = PrivateKey.from_normal_bytes(
+    seed.slice(0, 32)
+  );
+
+  return getAccountDataFromPrivateKey(privateKey);
+}
+
+async function getAccountDataFromPrivateKey(
+  privateKey: any
+): Promise<AccountKeys> {
   const {
-    PrivateKey,
     PublicKey,
     Account,
     AccountIdentifier,
     AddressDiscrimination
   } = await wasmBindings;
-  const privateKey: PrivateKey = PrivateKey.from_bech32(secret);
   const publicKey: PublicKey = privateKey.to_public();
-  const account: Account = Account.single_from_public_key(publicKey);
+  const account: Account = Account.from_public_key(publicKey);
+  const secret = privateKey.to_bech32();
   const identifier: AccountIdentifier = account.to_identifier();
   const networkDiscrimination: AddressDiscrimination =
     config.get('networkDiscrimination') === 'testnet'
@@ -39,7 +58,7 @@ export async function getAccountFromPrivateKey(
 }
 
 export async function buildDelegateTransaction(
-  poolId: InternalPoolId,
+  newDelegation: Delegation,
   secret: InternalPrivateKey,
   accountCounter: Counter,
   nodeSettings: NodeSettings
@@ -49,17 +68,37 @@ export async function buildDelegateTransaction(
     Certificate,
     StakeDelegation,
     DelegationType,
+    DelegationRatio,
+    PoolDelegationRatios,
+    PoolDelegationRatio,
     PrivateKey,
     PublicKey
   } = await wasmBindings;
   const privateKey: PrivateKey = PrivateKey.from_bech32(secret);
   const sourcePublicKey: PublicKey = privateKey.to_public();
+  let delegationType: DelegationType;
+  const pools: Array<PoolId> = Object.keys(newDelegation);
+  if (pools.length === 0) {
+    delegationType = DelegationType.non_delegated();
+  } else if (pools.length === 1) {
+    delegationType = DelegationType.full(PoolId.from_hex(pools[0]));
+  } else {
+    const poolDelegationRatios = PoolDelegationRatios.new();
+    pools.forEach(poolId =>
+      poolDelegationRatios.add(
+        PoolDelegationRatio.new(
+          PoolId.from_hex(poolId),
+          newDelegation[poolId].parts
+        )
+      )
+    );
+    delegationType = DelegationType.ratio(
+      DelegationRatio.new(totalParts(newDelegation), poolDelegationRatios)
+    );
+  }
   // Create certificate
-  const singlePoolDelegation: DelegationType = DelegationType.full(
-    PoolId.from_hex(poolId)
-  );
   const certificate: Certificate = Certificate.stake_delegation(
-    StakeDelegation.new(singlePoolDelegation, sourcePublicKey)
+    StakeDelegation.new(delegationType, sourcePublicKey)
   );
   return buildTransaction(secret, nodeSettings, accountCounter, certificate);
 }
@@ -122,7 +161,7 @@ async function buildTransaction(
   } = await wasmBindings;
   const { calculateFee } = feeCalculator(nodeSettings);
   const privateKey: PrivateKey = PrivateKey.from_bech32(secret);
-  const sourceAccount: Account = Account.single_from_public_key(
+  const sourceAccount: Account = Account.from_public_key(
     privateKey.to_public()
   );
 
@@ -189,7 +228,7 @@ async function buildTransaction(
   const signature: PayloadAuthData = certificate
     ? PayloadAuthData.for_stake_delegation(
         StakeDelegationAuthData.new(
-          AccountBindingSignature.new_single(
+          AccountBindingSignature.new(
             PrivateKey.from_bech32(secret),
             builderSignCertificate.get_auth_data()
           )
