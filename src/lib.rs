@@ -1767,7 +1767,7 @@ impl Fragment {
     pub fn get_transaction(&self) -> Result<Transaction, JsValue> {
         use chain::fragment::Fragment as F;
         use TaggedTransaction as T;
-        match self.0 {
+        match self.0.clone() {
             F::Transaction(auth) => Ok(T::NoExtra(auth)),
             F::OwnerStakeDelegation(auth) => Ok(T::OwnerStakeDelegation(auth)),
             F::StakeDelegation(auth) => Ok(T::StakeDelegation(auth)),
@@ -1780,7 +1780,7 @@ impl Fragment {
     }
 
     pub fn get_old_utxo_declaration(&self) -> Result<OldUtxoDeclaration, JsValue> {
-        match self.0 {
+        match self.0.clone() {
             chain::fragment::Fragment::OldUtxoDeclaration(decl) => Ok(OldUtxoDeclaration(decl)),
             _ => Err(JsValue::from_str("fragment is not OldUtxoDeclaration"))
         }
