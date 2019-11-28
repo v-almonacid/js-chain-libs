@@ -1,4 +1,6 @@
 // @flow
+import { push } from 'connected-react-router';
+import curry from 'lodash/curry';
 import type {
   AppState,
   Thunk,
@@ -9,13 +11,16 @@ import type {
   Amount,
   Address,
   PoolId,
+  Delegation,
   Identifier,
   TransactionHash,
   Transaction
 } from '../models';
+import { updateNodeSettings } from './nodeSettings';
 import {
   getAccountFromPrivateKey,
   buildSendFundsTransaction,
+  getAccountFromSeed,
   buildDelegateTransaction
 } from '../utils/wasmWrapper';
 import {
@@ -23,26 +28,46 @@ import {
   broadcastTransaction,
   getTransactions
 } from '../utils/nodeConnection';
+import { isValidMnemonic, createSeedFromMnemonic } from '../utils/mnemonic';
+import routes from '../constants/routes.json';
 
 export type SetKeysAction = { type: 'SET_KEYS' } & AccountKeys;
 export const SET_KEYS = 'SET_KEYS';
 
 export function setAccount(privateKey: string): Thunk<SetKeysAction> {
   return function setAccountThunk(dispatch) {
-    return getAccountFromPrivateKey(privateKey)
-      .then((keys: AccountKeys) =>
-        dispatch({
-          type: SET_KEYS,
-          ...keys
-        })
-      )
-      .then(() =>
-        Promise.all([
-          dispatch(updateAccountTransactions()),
-          dispatch(updateAccountState())
-        ])
-      );
+    return getAccountFromPrivateKey(privateKey).then(
+      curry(initializeKeysAndRedirect)(dispatch)
+    );
   };
+}
+
+const initializeKeysAndRedirect = (dispatch, keys: AccountKeys) => {
+  dispatch({
+    type: SET_KEYS,
+    ...keys
+  });
+  return Promise.all([
+    dispatch(updateAccountTransactions()),
+    dispatch(updateNodeSettings()),
+    dispatch(updateAccountState())
+  ]).then(() => dispatch(push(routes.WALLET)));
+};
+
+export function setAccountFromMnemonic(
+  mnemonicPhrase: string,
+  mnemonicPassword?: string
+): Thunk<SetKeysAction> {
+  if (isValidMnemonic(mnemonicPhrase)) {
+    const seed = createSeedFromMnemonic(mnemonicPhrase, mnemonicPassword);
+    return function setAccountThunk(dispatch) {
+      return getAccountFromSeed(seed).then(
+        curry(initializeKeysAndRedirect)(dispatch)
+      );
+    };
+  }
+  // TODO: Add a message displaying error
+  console.log('Mnemonic phrase is not valid');
 }
 
 export type SetAccountStateAction = {
@@ -68,7 +93,10 @@ export function updateAccountState(): Thunk<SetAccountStateAction> {
           })
         )
         // TODO: display a notification or something
-        .catch(() => console.error('there was an error fetching account info'))
+        .catch(() => {
+          console.error('there was an error fetching account info');
+          return Promise.reject();
+        })
     );
   };
 }
@@ -97,7 +125,10 @@ export function updateAccountTransactions(): Thunk<SetAccountStateAction> {
           })
         )
         // TODO: display a notification or something
-        .catch(() => console.error('there was an error fetching transactions'))
+        .catch(() => {
+          console.error('there was an error fetching transactions');
+          return Promise.reject();
+        })
     );
   };
 }
@@ -147,18 +178,20 @@ export type SendStakeDelegation = {
   type: 'SEND_STAKE_DELEGATION',
   newCounter: number,
   id: TransactionHash,
-  pool: PoolId,
+  pools: Array<PoolId>,
   fee: Amount
 };
 
 export const SEND_STAKE_DELEGATION = 'SEND_STAKE_DELEGATION';
 
-export function sendStakeDelegation(pool: PoolId): Thunk<SendStakeDelegation> {
+export function sendStakeDelegation(
+  newDelegation: Delegation
+): Thunk<SendStakeDelegation> {
   // Assume balance and counter are up to date
   return function sendStakeDelegationThunk(dispatch, getState) {
     const state: AppState = getState();
     return buildDelegateTransaction(
-      pool,
+      newDelegation,
       state.account.privateKey,
       state.account.counter,
       state.nodeSettings
@@ -171,7 +204,7 @@ export function sendStakeDelegation(pool: PoolId): Thunk<SendStakeDelegation> {
           type: SEND_STAKE_DELEGATION,
           newCounter: state.account.counter + 1,
           id,
-          pool,
+          pools: Object.keys(newDelegation),
           fee
         })
       );
