@@ -1274,7 +1274,7 @@ impl PoolRetirement {
 }
 
 #[wasm_bindgen]
-pub enum CertificateType {
+pub enum CertificateKind {
     StakeDelegation,
     OwnerStakeDelegation,
     PoolRegistration,
@@ -1298,15 +1298,15 @@ impl Certificate {
         certificate::Certificate::PoolRetirement(pool_retirement.0.clone()).into()
     }
 
-    pub fn get_type(&self) -> CertificateType {
+    pub fn get_type(&self) -> CertificateKind {
         match &self.0 {
-            certificate::Certificate::StakeDelegation(_) => CertificateType::StakeDelegation,
+            certificate::Certificate::StakeDelegation(_) => CertificateKind::StakeDelegation,
             certificate::Certificate::OwnerStakeDelegation(_) => {
-                CertificateType::OwnerStakeDelegation
+                CertificateKind::OwnerStakeDelegation
             }
-            certificate::Certificate::PoolRegistration(_) => CertificateType::PoolRegistration,
-            certificate::Certificate::PoolRetirement(_) => CertificateType::PoolRetirement,
-            certificate::Certificate::PoolUpdate(_) => CertificateType::PoolUpdate,
+            certificate::Certificate::PoolRegistration(_) => CertificateKind::PoolRegistration,
+            certificate::Certificate::PoolRetirement(_) => CertificateKind::PoolRetirement,
+            certificate::Certificate::PoolUpdate(_) => CertificateKind::PoolUpdate,
         }
     }
 
