@@ -1764,7 +1764,7 @@ impl Fragment {
     }
 
     /// Get a Transaction if the Fragment represents one
-    pub fn get_transaction(self) -> Result<Transaction, JsValue> {
+    pub fn get_transaction(&self) -> Result<Transaction, JsValue> {
         use chain::fragment::Fragment as F;
         use TaggedTransaction as T;
         match self.0 {
@@ -1779,7 +1779,7 @@ impl Fragment {
         .map(Transaction)
     }
 
-    pub fn get_old_utxo_declaration(self) -> Result<OldUtxoDeclaration, JsValue> {
+    pub fn get_old_utxo_declaration(&self) -> Result<OldUtxoDeclaration, JsValue> {
         match self.0 {
             chain::fragment::Fragment::OldUtxoDeclaration(decl) => Ok(OldUtxoDeclaration(decl)),
             _ => Err(JsValue::from_str("fragment is not OldUtxoDeclaration"))
