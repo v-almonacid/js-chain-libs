@@ -1660,7 +1660,10 @@ impl Witness {
     }
 
     // Witness for a legacy icarus utxo-based transaction generated externally (such as hardware wallets)
-    pub fn from_external_legacy_icarus_utxo(key: &Bip32PublicKey, witness: &LegacyUtxoWitness) -> Witness {
+    pub fn from_external_legacy_icarus_utxo(
+        key: &Bip32PublicKey,
+        witness: &LegacyUtxoWitness,
+    ) -> Witness {
         Witness(tx::Witness::OldUtxo(key.0.clone(), witness.0.clone()))
     }
 
@@ -1782,7 +1785,7 @@ impl Fragment {
     pub fn get_old_utxo_declaration(&self) -> Result<OldUtxoDeclaration, JsValue> {
         match self.0.clone() {
             chain::fragment::Fragment::OldUtxoDeclaration(decl) => Ok(OldUtxoDeclaration(decl)),
-            _ => Err(JsValue::from_str("fragment is not OldUtxoDeclaration"))
+            _ => Err(JsValue::from_str("fragment is not OldUtxoDeclaration")),
         }
     }
 
