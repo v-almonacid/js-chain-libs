@@ -19,6 +19,7 @@ use std::convert::TryFrom;
 use std::ops::{Add, Sub};
 use std::str::FromStr;
 use wasm_bindgen::prelude::*;
+use chain_core::mempack::{ReadBuf, Readable};
 
 pub use transaction::*;
 
@@ -1076,6 +1077,52 @@ impl U128 {
 }
 
 #[wasm_bindgen]
+#[derive(Clone)]
+pub struct GenesisProasLeaderHash(chain::certificate::GenesisProasLeaderHash);
+
+impl From<chain::certificate::GenesisProasLeaderHash> for GenesisProasLeaderHash {
+    fn from(key_hash: chain::certificate::GenesisProasLeaderHash) -> GenesisProasLeaderHash {
+        GenesisProasLeaderHash(key_hash)
+    }
+}
+
+#[wasm_bindgen]
+impl GenesisProasLeaderHash {
+    pub fn from_hex(hex_string: &str) -> Result<GenesisProasLeaderHash, JsValue> {
+        crypto::Blake2b256::from_str(hex_string)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
+            .map(|hash| GenesisProasLeaderHash(hash.into()))
+    }
+
+    pub fn to_string(&self) -> String {
+        format!("{}", self.0).to_string()
+    }
+}
+
+#[wasm_bindgen]
+pub struct GenesisPraosLeader(chain::leadership::genesis::GenesisPraosLeader);
+
+impl From<chain::leadership::genesis::GenesisPraosLeader> for GenesisPraosLeader {
+    fn from(leader: chain::leadership::genesis::GenesisPraosLeader) -> GenesisPraosLeader {
+        GenesisPraosLeader(leader)
+    }
+}
+
+#[wasm_bindgen]
+impl GenesisPraosLeader {
+    pub fn new(
+        kes_public_key: &KesPublicKey,
+        vrf_public_key: &VrfPublicKey,
+    ) -> Self {
+        Self(chain::leadership::genesis::GenesisPraosLeader {
+            kes_public_key: kes_public_key.0.clone(),
+            vrf_public_key: vrf_public_key.0.clone(),
+        })
+    }
+
+}
+
+#[wasm_bindgen]
 pub struct Certificate(certificate::Certificate);
 
 impl From<certificate::Certificate> for Certificate {
@@ -1221,6 +1268,17 @@ impl StakeDelegation {
     pub fn account(&self) -> AccountIdentifier {
         AccountIdentifier(self.0.account_id.clone())
     }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.0.serialize().as_ref().to_vec()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<StakeDelegation, JsValue> {
+        let mut buf = ReadBuf::from(&bytes);
+        chain::certificate::StakeDelegation::read(&mut buf)
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))
+            .map(StakeDelegation)
+    }
 }
 
 #[wasm_bindgen]
@@ -1244,6 +1302,17 @@ impl OwnerStakeDelegation {
     pub fn delegation_type(&self) -> DelegationType {
         self.0.delegation.clone().into()
     }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.0.serialize().as_ref().to_vec()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<OwnerStakeDelegation, JsValue> {
+        let mut buf = ReadBuf::from(&bytes);
+        chain::certificate::OwnerStakeDelegation::read(&mut buf)
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))
+            .map(OwnerStakeDelegation)
+    }
 }
 
 #[wasm_bindgen]
@@ -1255,6 +1324,7 @@ impl From<chain::certificate::PoolRetirement> for PoolRetirement {
     }
 }
 
+#[wasm_bindgen]
 impl PoolRetirement {
     pub fn new(pool_id: &PoolId, retirement_time_offset: &TimeOffsetSeconds) -> Self {
         chain::certificate::PoolRetirement {
@@ -1270,6 +1340,71 @@ impl PoolRetirement {
 
     pub fn retirement_time(&self) -> TimeOffsetSeconds {
         self.0.retirement_time.clone().into()
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.0.serialize().as_ref().to_vec()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<PoolRetirement, JsValue> {
+        let mut buf = ReadBuf::from(&bytes);
+        chain::certificate::PoolRetirement::read(&mut buf)
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))
+            .map(PoolRetirement)
+    }
+}
+
+#[wasm_bindgen]
+pub struct PoolUpdate(chain::certificate::PoolUpdate);
+
+impl From<chain::certificate::PoolUpdate> for PoolUpdate {
+    fn from(update: chain::certificate::PoolUpdate) -> PoolUpdate {
+        PoolUpdate(update)
+    }
+}
+
+#[wasm_bindgen]
+impl PoolUpdate {
+    pub fn new(
+        pool_id: &PoolId,
+        start_validity: &TimeOffsetSeconds,
+        previous_keys: &GenesisProasLeaderHash,
+        updated_keys: &GenesisPraosLeader,
+    ) -> Self {
+        chain::certificate::PoolUpdate {
+            pool_id: pool_id.0.clone(),
+            start_validity: start_validity.0.clone(),
+            previous_keys: previous_keys.0.clone(),
+            updated_keys: updated_keys.0.clone(),
+        }
+        .into()
+    }
+
+    pub fn pool_id(&self) -> PoolId {
+        self.0.pool_id.clone().into()
+    }
+
+    pub fn start_validity(&self) -> TimeOffsetSeconds {
+        self.0.start_validity.into()
+    }
+
+    pub fn previous_keys(&self) -> GenesisProasLeaderHash {
+        GenesisProasLeaderHash(self.0.previous_keys.clone())
+    }
+
+    pub fn updated_keys(&self) -> GenesisPraosLeader {
+        GenesisPraosLeader(self.0.updated_keys.clone())
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.0.serialize().as_ref().to_vec()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<PoolUpdate, JsValue> {
+        let mut buf = ReadBuf::from(&bytes);
+        chain::certificate::PoolUpdate::read(&mut buf)
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))
+            .map(PoolUpdate)
     }
 }
 
@@ -1288,6 +1423,11 @@ impl Certificate {
         certificate::Certificate::StakeDelegation(stake_delegation.0.clone()).into()
     }
 
+    /// Create a Certificate for OwnerStakeDelegation
+    pub fn owner_stake_delegation(owner_stake: &OwnerStakeDelegation) -> Certificate {
+        certificate::Certificate::OwnerStakeDelegation(owner_stake.0.clone()).into()
+    }
+
     /// Create a Certificate for PoolRegistration
     pub fn stake_pool_registration(pool_registration: &PoolRegistration) -> Certificate {
         certificate::Certificate::PoolRegistration(pool_registration.0.clone()).into()
@@ -1296,6 +1436,11 @@ impl Certificate {
     /// Create a Certificate for PoolRetirement
     pub fn stake_pool_retirement(pool_retirement: &PoolRetirement) -> Certificate {
         certificate::Certificate::PoolRetirement(pool_retirement.0.clone()).into()
+    }
+
+    /// Create a Certificate for PoolUpdate
+    pub fn stake_pool_update(pool_update: &PoolUpdate) -> Certificate {
+        certificate::Certificate::PoolUpdate(pool_update.0.clone()).into()
     }
 
     pub fn get_type(&self) -> CertificateKind {
@@ -1338,7 +1483,12 @@ impl Certificate {
         }
     }
 
-    // get_pool_update() not yet needed, implement here
+    pub fn get_pool_update(&self) -> Result<PoolUpdate, JsValue> {
+        match &self.0 {
+            certificate::Certificate::PoolUpdate(cert) => Ok(cert.clone().into()),
+            _ => Err(JsValue::from_str("Certificate is not PoolUpdate")),
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -1350,8 +1500,7 @@ impl PoolRegistration {
         operators: &PublicKeys,
         management_threshold: u8,
         start_validity: &TimeOffsetSeconds,
-        kes_public_key: &KesPublicKey,
-        vrf_public_key: &VrfPublicKey,
+        leader_keys: &GenesisPraosLeader,
     ) -> PoolRegistration {
         use chain::certificate::PoolPermissions;
         chain::certificate::PoolRegistration {
@@ -1364,10 +1513,7 @@ impl PoolRegistration {
             rewards: chain::rewards::TaxType::zero(),
             // TODO: Hardcoded parameter
             reward_account: None,
-            keys: chain::leadership::genesis::GenesisPraosLeader {
-                kes_public_key: kes_public_key.0.clone(),
-                vrf_public_key: vrf_public_key.0.clone(),
-            },
+            keys: leader_keys.0.clone(),
         }
         .into()
     }
@@ -1380,12 +1526,37 @@ impl PoolRegistration {
         self.0.start_validity.into()
     }
 
+    /// TODO: missing PoolPermissions. Don't think we need this for now
+
     pub fn owners(&self) -> PublicKeys {
         PublicKeys(self.0.owners.iter().map(|key| key.clone().into()).collect())
     }
 
+    pub fn operators(&self) -> PublicKeys {
+        PublicKeys(self.0.operators.iter().map(|key| key.clone().into()).collect())
+    }
+
     pub fn rewards(&self) -> TaxType {
         self.0.rewards.into()
+    }
+
+    pub fn reward_account(&self) -> Option<Account> {
+        self.0.reward_account.as_ref().map(|acc| Account(acc.clone()))
+    }
+
+    pub fn keys(&self) -> GenesisPraosLeader {
+        GenesisPraosLeader(self.0.keys.clone())
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.0.serialize().as_ref().to_vec()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<PoolRegistration, JsValue> {
+        let mut buf = ReadBuf::from(&bytes);
+        chain::certificate::PoolRegistration::read(&mut buf)
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))
+            .map(PoolRegistration)
     }
 }
 
