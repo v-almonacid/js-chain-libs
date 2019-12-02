@@ -1489,6 +1489,16 @@ impl Certificate {
             _ => Err(JsValue::from_str("Certificate is not PoolUpdate")),
         }
     }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        match &self.0 {
+            certificate::Certificate::StakeDelegation(cert) => cert.serialize().as_ref().to_vec(),
+            certificate::Certificate::OwnerStakeDelegation(cert) => cert.serialize().as_ref().to_vec(),
+            certificate::Certificate::PoolRegistration(cert) => cert.serialize().as_ref().to_vec(),
+            certificate::Certificate::PoolRetirement(cert) => cert.serialize().as_ref().to_vec(),
+            certificate::Certificate::PoolUpdate(cert) => cert.serialize().as_ref().to_vec(),
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -1526,7 +1536,7 @@ impl PoolRegistration {
         self.0.start_validity.into()
     }
 
-    /// TODO: missing PoolPermissions. Don't think we need this for now
+    // TODO: missing PoolPermissions. Don't think we need this for now
 
     pub fn owners(&self) -> PublicKeys {
         PublicKeys(self.0.owners.iter().map(|key| key.clone().into()).collect())
