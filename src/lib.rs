@@ -1078,20 +1078,20 @@ impl U128 {
 
 #[wasm_bindgen]
 #[derive(Clone)]
-pub struct GenesisProasLeaderHash(chain::certificate::GenesisProasLeaderHash);
+pub struct GenesisPraosLeaderHash(chain::certificate::GenesisPraosLeaderHash);
 
-impl From<chain::certificate::GenesisProasLeaderHash> for GenesisProasLeaderHash {
-    fn from(key_hash: chain::certificate::GenesisProasLeaderHash) -> GenesisProasLeaderHash {
-        GenesisProasLeaderHash(key_hash)
+impl From<chain::certificate::GenesisPraosLeaderHash> for GenesisPraosLeaderHash {
+    fn from(key_hash: chain::certificate::GenesisPraosLeaderHash) -> GenesisPraosLeaderHash {
+        GenesisPraosLeaderHash(key_hash)
     }
 }
 
 #[wasm_bindgen]
-impl GenesisProasLeaderHash {
-    pub fn from_hex(hex_string: &str) -> Result<GenesisProasLeaderHash, JsValue> {
+impl GenesisPraosLeaderHash {
+    pub fn from_hex(hex_string: &str) -> Result<GenesisPraosLeaderHash, JsValue> {
         crypto::Blake2b256::from_str(hex_string)
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
-            .map(|hash| GenesisProasLeaderHash(hash.into()))
+            .map(|hash| GenesisPraosLeaderHash(hash.into()))
     }
 
     pub fn to_string(&self) -> String {
@@ -1368,7 +1368,7 @@ impl PoolUpdate {
     pub fn new(
         pool_id: &PoolId,
         start_validity: &TimeOffsetSeconds,
-        previous_keys: &GenesisProasLeaderHash,
+        previous_keys: &GenesisPraosLeaderHash,
         updated_keys: &GenesisPraosLeader,
     ) -> Self {
         chain::certificate::PoolUpdate {
@@ -1388,8 +1388,8 @@ impl PoolUpdate {
         self.0.start_validity.into()
     }
 
-    pub fn previous_keys(&self) -> GenesisProasLeaderHash {
-        GenesisProasLeaderHash(self.0.previous_keys.clone())
+    pub fn previous_keys(&self) -> GenesisPraosLeaderHash {
+        GenesisPraosLeaderHash(self.0.previous_keys.clone())
     }
 
     pub fn updated_keys(&self) -> GenesisPraosLeader {
