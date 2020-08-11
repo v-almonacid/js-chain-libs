@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies]
-wasm-bindgen = { version = "0.1.0", features=["serde-serialize"] }
+wasm-bindgen = { version = "0.2.67", features=["serde-serialize"] }
 chain-addr = { path = "./chain-libs/chain-addr" }
 chain-impl-mockchain = { path = "./chain-libs/chain-impl-mockchain" }
 chain-crypto = { path = "./chain-libs/chain-crypto" }
